@@ -5,10 +5,75 @@ import (
 	"fmt"
 	"strconv"
 
-	// "fmt"
 	"log"
 	"net/http"
 )
+
+type APIServer struct {
+	listenAddr string
+	store      Storage
+}
+
+func NewAPIServer(listenAddr string, store Storage) *APIServer {
+	return &APIServer{
+		listenAddr: listenAddr,
+		store:      store,
+	}
+}
+
+func (s *APIServer) Run() {
+	router := http.NewServeMux()
+
+	router.HandleFunc("GET /account", makeHTTPHandleFunc(s.handleGetAllAccounts))
+	router.HandleFunc("POST /account", makeHTTPHandleFunc(s.handleCreateAccount))
+	router.HandleFunc("GET /account/{id}", makeHTTPHandleFunc(s.handleGetAccountByID))
+
+	log.Println("API server running on port:", s.listenAddr)
+	if err := http.ListenAndServe(s.listenAddr, router); err != nil {
+		log.Fatal("Error booting up the server:", err)
+	}
+}
+
+func (s *APIServer) handleGetAllAccounts(w http.ResponseWriter, r *http.Request) error {
+	accounts, err := s.store.GetAccounts()
+	if err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusOK, accounts)
+}
+
+func (s *APIServer) handleGetAccountByID(w http.ResponseWriter, r *http.Request) error {
+	strId := r.PathValue("id")
+	id, err := strconv.Atoi(strId)
+	if err != nil {
+		return fmt.Errorf("invalid ID: %v", err)
+	}
+
+	return WriteJSON(w, http.StatusOK, &Account{ID: id})
+}
+
+func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) error {
+	newAccount := &NewAccount{}
+	if err := json.NewDecoder(r.Body).Decode(newAccount); err != nil {
+		return err
+	}
+	account := GenerateNewAccount(newAccount.FirstName, newAccount.LastName)
+
+	if err := s.store.CreateAccount(account); err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusOK, account)
+}
+
+func (s *APIServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) error {
+	return nil
+}
+
+func (s *APIServer) handleFundTransfer(w http.ResponseWriter, r *http.Request) error {
+	return nil
+}
 
 func WriteJSON(w http.ResponseWriter, status int, v any) error {
 	w.Header().Set("Content-Type", "application/json")
@@ -28,53 +93,4 @@ func makeHTTPHandleFunc(f APIFunc) http.HandlerFunc {
 			WriteJSON(w, http.StatusBadRequest, APIError{Error: err.Error()})
 		}
 	}
-}
-
-type APIServer struct {
-	listenAddr string
-}
-
-func NewAPIServer(listenAddr string) *APIServer {
-	return &APIServer{
-		listenAddr: listenAddr,
-	}
-}
-
-func (s *APIServer) Run() {
-	router := http.NewServeMux()
-
-	router.HandleFunc("GET /account", makeHTTPHandleFunc(s.handleGetAccount))
-	router.HandleFunc("GET /account/{id}", makeHTTPHandleFunc(s.handleGetAccountByID))
-
-	log.Println("API server running on port:", s.listenAddr)
-	if err := http.ListenAndServe(s.listenAddr, router); err != nil {
-		log.Fatal("Error booting up the server:", err)
-	}
-}
-
-func (s *APIServer) handleGetAccount(w http.ResponseWriter, r *http.Request) error {
-	account := CreateNewAccount("John", "Doe")
-	return WriteJSON(w, http.StatusOK, account)
-}
-
-func (s *APIServer) handleGetAccountByID(w http.ResponseWriter, r *http.Request) error {
-	strId := r.PathValue("id")
-	id, err := strconv.Atoi(strId)
-	if err != nil {
-		return fmt.Errorf("invalid ID: %v", err)
-	}
-
-	return WriteJSON(w, http.StatusOK, id)
-}
-
-func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) error {
-	return nil
-}
-
-func (s *APIServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) error {
-	return nil
-}
-
-func (s *APIServer) handleFundTransfer(w http.ResponseWriter, r *http.Request) error {
-	return nil
 }
