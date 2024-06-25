@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -87,19 +88,40 @@ func (s *PostgresStore) GetAccounts() ([]*Account, error) {
 	accounts := []*Account{}
 
 	for rows.Next() {
-		account := &Account{}
-
-		err := rows.Scan(&account.ID, &account.FirstName, &account.LastName, &account.Phone, &account.Balance, &account.CreatedAt)
-
+		account, err := scanIntoAccount(rows)
 		if err != nil {
 			return nil, err
 		}
+
 		accounts = append(accounts, account)
 	}
 
 	return accounts, nil
 }
 
-func (s *PostgresStore) GetAccountByID(int) (*Account, error) {
-	return nil, nil
+func (s *PostgresStore) GetAccountByID(id int) (*Account, error) {
+	rows, err := s.db.Query(`select * from account where id=$1`, id)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		return scanIntoAccount(rows)
+	}
+	return nil, fmt.Errorf("account %d not found", id)
+}
+
+func scanIntoAccount(rows *sql.Rows) (*Account, error) {
+	account := &Account{}
+
+	err := rows.Scan(
+		&account.ID,
+		&account.FirstName,
+		&account.LastName,
+		&account.Phone,
+		&account.Balance,
+		&account.CreatedAt,
+	)
+
+	return account, err
 }

@@ -23,7 +23,7 @@ func GenerateNewAccount(firstname, lastname string) *Account {
 	return &Account{
 		FirstName: firstname,
 		LastName:  lastname,
-		Phone:     int64(rand.Intn(1e6)),
+		Phone:     int64(rand.Intn(1e5)),
 		CreatedAt: time.Now().UTC(),
 	}
 }

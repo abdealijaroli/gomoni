@@ -11,7 +11,7 @@ import (
 
 type APIServer struct {
 	listenAddr string
-	store      Storage
+	store      Storage 
 }
 
 func NewAPIServer(listenAddr string, store Storage) *APIServer {
@@ -44,13 +44,18 @@ func (s *APIServer) handleGetAllAccounts(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *APIServer) handleGetAccountByID(w http.ResponseWriter, r *http.Request) error {
-	strId := r.PathValue("id")
-	id, err := strconv.Atoi(strId)
+	strID := r.PathValue("id")
+	id, err := strconv.Atoi(strID)
 	if err != nil {
-		return fmt.Errorf("invalid ID: %v", err)
+		return fmt.Errorf("invalid id")
 	}
 
-	return WriteJSON(w, http.StatusOK, &Account{ID: id})
+	res, err := s.store.GetAccountByID(id)
+	if err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusOK, res)
 }
 
 func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) error {
