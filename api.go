@@ -11,7 +11,7 @@ import (
 
 type APIServer struct {
 	listenAddr string
-	store      Storage 
+	store      Storage
 }
 
 func NewAPIServer(listenAddr string, store Storage) *APIServer {
@@ -27,6 +27,8 @@ func (s *APIServer) Run() {
 	router.HandleFunc("GET /account", makeHTTPHandleFunc(s.handleGetAllAccounts))
 	router.HandleFunc("POST /account", makeHTTPHandleFunc(s.handleCreateAccount))
 	router.HandleFunc("GET /account/{id}", makeHTTPHandleFunc(s.handleGetAccountByID))
+	router.HandleFunc("DELETE /account/{id}", makeHTTPHandleFunc(s.handleDeleteAccount))
+	router.HandleFunc("POST /transfer", makeHTTPHandleFunc(s.handleTransfer))
 
 	log.Println("API server running on port:", s.listenAddr)
 	if err := http.ListenAndServe(s.listenAddr, router); err != nil {
@@ -44,18 +46,17 @@ func (s *APIServer) handleGetAllAccounts(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *APIServer) handleGetAccountByID(w http.ResponseWriter, r *http.Request) error {
-	strID := r.PathValue("id")
-	id, err := strconv.Atoi(strID)
-	if err != nil {
-		return fmt.Errorf("invalid id")
-	}
-
-	res, err := s.store.GetAccountByID(id)
+	id, err := getID(r)
 	if err != nil {
 		return err
 	}
 
-	return WriteJSON(w, http.StatusOK, res)
+	acc, err := s.store.GetAccountByID(id)
+	if err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusOK, acc)
 }
 
 func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) error {
@@ -64,20 +65,31 @@ func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 		return err
 	}
 	account := GenerateNewAccount(newAccount.FirstName, newAccount.LastName)
-
 	if err := s.store.CreateAccount(account); err != nil {
 		return err
 	}
-
 	return WriteJSON(w, http.StatusOK, account)
 }
 
 func (s *APIServer) handleDeleteAccount(w http.ResponseWriter, r *http.Request) error {
-	return nil
+	id, err := getID(r)
+	if err != nil {
+		return err
+	}
+	if err := s.store.DeleteAccount(id); err != nil {
+		return err
+	}
+	return WriteJSON(w, http.StatusOK, map[string]int{"deleted": id})
 }
 
-func (s *APIServer) handleFundTransfer(w http.ResponseWriter, r *http.Request) error {
-	return nil
+func (s *APIServer) handleTransfer(w http.ResponseWriter, r *http.Request) error {
+	transferReq := &TransferRequest{}
+	if err := json.NewDecoder(r.Body).Decode(transferReq); err != nil {
+		return err
+	}
+	defer r.Body.Close()
+
+	return WriteJSON(w, http.StatusOK, transferReq)
 }
 
 func WriteJSON(w http.ResponseWriter, status int, v any) error {
@@ -89,7 +101,7 @@ func WriteJSON(w http.ResponseWriter, status int, v any) error {
 type APIFunc func(http.ResponseWriter, *http.Request) error
 
 type APIError struct {
-	Error string
+	Error string `json:"error"`
 }
 
 func makeHTTPHandleFunc(f APIFunc) http.HandlerFunc {
@@ -98,4 +110,13 @@ func makeHTTPHandleFunc(f APIFunc) http.HandlerFunc {
 			WriteJSON(w, http.StatusBadRequest, APIError{Error: err.Error()})
 		}
 	}
+}
+
+func getID(r *http.Request) (int, error) {
+	strID := r.PathValue("id")
+	id, err := strconv.Atoi(strID)
+	if err != nil {
+		return id, fmt.Errorf("invalid ID: %d", id)
+	}
+	return id, nil
 }
