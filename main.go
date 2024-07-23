@@ -14,7 +14,7 @@ func main() {
 	if err := store.Init(); err != nil {
 		log.Fatalf("Error initializing the database: %v", err)
 	}
-	log.Println("Successfully initialized the database.")
+	log.Println("Successfully initialized the database")
 
 	server := NewAPIServer(":8008", store)
 	server.Run()
