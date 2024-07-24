@@ -7,6 +7,8 @@ import (
 
 	"log"
 	"net/http"
+
+	jwt "github.com/golang-jwt/jwt/v5"
 )
 
 type APIServer struct {
@@ -26,7 +28,7 @@ func (s *APIServer) Run() {
 
 	router.HandleFunc("GET /account", makeHTTPHandleFunc(s.handleGetAllAccounts))
 	router.HandleFunc("POST /account", makeHTTPHandleFunc(s.handleCreateAccount))
-	router.HandleFunc("GET /account/{id}", makeHTTPHandleFunc(s.handleGetAccountByID))
+	router.HandleFunc("GET /account/{id}", authWithJWT(makeHTTPHandleFunc(s.handleGetAccountByID)))
 	router.HandleFunc("DELETE /account/{id}", makeHTTPHandleFunc(s.handleDeleteAccount))
 	router.HandleFunc("POST /transfer", makeHTTPHandleFunc(s.handleTransfer))
 
@@ -90,6 +92,13 @@ func (s *APIServer) handleTransfer(w http.ResponseWriter, r *http.Request) error
 	defer r.Body.Close()
 
 	return WriteJSON(w, http.StatusOK, transferReq)
+}
+
+func authWithJWT(f http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("jwt here")
+		f(w, r)
+	}
 }
 
 func WriteJSON(w http.ResponseWriter, status int, v any) error {

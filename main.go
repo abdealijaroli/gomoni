@@ -9,7 +9,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error connecting to the database: %v", err)
 	}
-	log.Println("Successfully connected to the database.")
+	log.Println("Successfully connected to the database")
 
 	if err := store.Init(); err != nil {
 		log.Fatalf("Error initializing the database: %v", err)
@@ -19,3 +19,4 @@ func main() {
 	server := NewAPIServer(":8008", store)
 	server.Run()
 }
+ 
