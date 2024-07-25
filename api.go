@@ -101,6 +101,19 @@ func authWithJWT(f http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+func validateJWT() {
+	// Create a new token object, specifying signing method and the claims
+	token := jwt.New(jwt.SigningMethodHS256)
+	// Set some claims
+	token.Claims = jwt.MapClaims{
+		"foo": "bar",
+		"nbf": time.Now().Unix(),
+	}
+	// Sign and get the complete encoded token as a string
+	tokenString, err := token.SignedString([]byte("secret"))
+	fmt.Println(tokenString, err)
+}
+
 func WriteJSON(w http.ResponseWriter, status int, v any) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
