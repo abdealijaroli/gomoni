@@ -3,10 +3,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
-
 	"log"
 	"net/http"
+	"os"
+	"strconv"
+	"time"
 
 	jwt "github.com/golang-jwt/jwt/v5"
 )
@@ -70,6 +71,14 @@ func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 	if err := s.store.CreateAccount(account); err != nil {
 		return err
 	}
+
+	tokenString, err := createJWT(account)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("jwt token: ", tokenString)
+
 	return WriteJSON(w, http.StatusOK, account)
 }
 
@@ -94,24 +103,47 @@ func (s *APIServer) handleTransfer(w http.ResponseWriter, r *http.Request) error
 	return WriteJSON(w, http.StatusOK, transferReq)
 }
 
+func createJWT(account *Account) (string, error) {
+	claims := jwt.MapClaims{
+		"expiresAt": time.Now().Add(time.Hour * 24).Unix(),
+		"accountID": account.ID,
+	}
+
+	secret := []byte(os.Getenv("JWT_SECRET"))
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	tokenString, err := token.SignedString(secret)
+
+	return tokenString, err
+}
+
 func authWithJWT(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Println("jwt here")
+		tokenString := r.Header.Get("Authorization")
+		if tokenString == "" {
+			WriteJSON(w, http.StatusUnauthorized, APIError{Error: "Authorization header required"})
+			return
+		}
+
+		token, err := validateJWT(tokenString)
+		if err != nil || !token.Valid {
+			WriteJSON(w, http.StatusUnauthorized, APIError{Error: "Invalid token"})
+			return
+		}
+
+		claims := token.Claims.(jwt.MapClaims)
+
+
+		fmt.Println(claims)
 		f(w, r)
 	}
 }
 
-func validateJWT() {
-	// Create a new token object, specifying signing method and the claims
-	token := jwt.New(jwt.SigningMethodHS256)
-	// Set some claims
-	token.Claims = jwt.MapClaims{
-		"foo": "bar",
-		"nbf": time.Now().Unix(),
-	}
-	// Sign and get the complete encoded token as a string
-	tokenString, err := token.SignedString([]byte("secret"))
-	fmt.Println(tokenString, err)
+func validateJWT(tokenString string) (*jwt.Token, error) {
+	secret := []byte(os.Getenv("JWT_SECRET"))
+	return jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		return secret, nil
+	})
 }
 
 func WriteJSON(w http.ResponseWriter, status int, v any) error {
