@@ -29,7 +29,7 @@ func (s *APIServer) Run() {
 
 	router.HandleFunc("GET /account", makeHTTPHandleFunc(s.handleGetAllAccounts))
 	router.HandleFunc("POST /account", makeHTTPHandleFunc(s.handleCreateAccount))
-	router.HandleFunc("GET /account/{id}", authWithJWT(makeHTTPHandleFunc(s.handleGetAccountByID)))
+	router.HandleFunc("GET /account/{id}", authWithJWT(makeHTTPHandleFunc(s.handleGetAccountByID), s.store))
 	router.HandleFunc("DELETE /account/{id}", makeHTTPHandleFunc(s.handleDeleteAccount))
 	router.HandleFunc("POST /transfer", makeHTTPHandleFunc(s.handleTransfer))
 
@@ -77,7 +77,7 @@ func (s *APIServer) handleCreateAccount(w http.ResponseWriter, r *http.Request) 
 		return err
 	}
 
-	fmt.Println("jwt token: ", tokenString)
+	fmt.Println("jwt token: ", tokenString) //remove
 
 	return WriteJSON(w, http.StatusOK, account)
 }
@@ -103,6 +103,10 @@ func (s *APIServer) handleTransfer(w http.ResponseWriter, r *http.Request) error
 	return WriteJSON(w, http.StatusOK, transferReq)
 }
 
+func unauthorized(w http.ResponseWriter) {
+	WriteJSON(w, http.StatusUnauthorized, APIError{Error: "Unauthorized"})
+}
+
 func createJWT(account *Account) (string, error) {
 	claims := jwt.MapClaims{
 		"expiresAt": time.Now().Add(time.Hour * 24).Unix(),
@@ -117,24 +121,39 @@ func createJWT(account *Account) (string, error) {
 	return tokenString, err
 }
 
-func authWithJWT(f http.HandlerFunc) http.HandlerFunc {
+func authWithJWT(f http.HandlerFunc, store Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		tokenString := r.Header.Get("Authorization")
 		if tokenString == "" {
-			WriteJSON(w, http.StatusUnauthorized, APIError{Error: "Authorization header required"})
+			unauthorized(w)
 			return
 		}
 
 		token, err := validateJWT(tokenString)
 		if err != nil || !token.Valid {
-			WriteJSON(w, http.StatusUnauthorized, APIError{Error: "Invalid token"})
+			unauthorized(w)
+			return
+		}
+
+		userID, err := getID(r)
+		if err != nil {
+			unauthorized(w)
+			return
+		}
+
+		account, err := store.GetAccountByID(userID)
+		if err != nil {
+			unauthorized(w)
 			return
 		}
 
 		claims := token.Claims.(jwt.MapClaims)
+	
+		if account.ID != int(claims["accountID"].(float64)) {
+			unauthorized(w)
+			return
+		}
 
-
-		fmt.Println(claims)
 		f(w, r)
 	}
 }
