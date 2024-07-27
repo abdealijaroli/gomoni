@@ -65,8 +65,9 @@ func (s *PostgresStore) CreateAccount(acc *Account) error {
 	q := `insert into 
 		account(first_name, last_name, phone, balance, created_at)
 		values($1, $2, $3, $4, $5)
+		returning id
 	`
-	_, err := s.db.Exec(q, acc.FirstName, acc.LastName, acc.Phone, acc.Balance, acc.CreatedAt)
+	err := s.db.QueryRow(q, acc.FirstName, acc.LastName, acc.Phone, acc.Balance, acc.CreatedAt).Scan(&acc.ID)
 
 	return err
 }
