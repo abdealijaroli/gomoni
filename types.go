@@ -58,4 +58,4 @@ func GenerateNewAccount(firstname, lastname, email, password string) (*Account, 
 		Phone:             int64(rand.Intn(1e5)),
 		CreatedAt:         time.Now().UTC(),
 	}, nil
-}
+} 
