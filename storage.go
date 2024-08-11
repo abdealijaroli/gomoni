@@ -15,10 +15,17 @@ type Storage interface {
 	UpdateAccount(*Account) error
 	GetAccounts() ([]*Account, error)
 	GetAccountByID(int) (*Account, error)
+	GetAccountByEmail(string) (*Account, error)
+	DropTable() error
 }
 
 type PostgresStore struct {
 	db *sql.DB
+}
+
+func (s *PostgresStore) DropTable() error {
+	_, err := s.db.Exec("DROP TABLE account")
+	return err
 }
 
 func NewPostgresStore() (*PostgresStore, error) {
@@ -51,7 +58,9 @@ func (s *PostgresStore) CreateAccountTable() error {
 		id serial primary key,
 		first_name varchar(50),
 		last_name varchar(50),
-		phone serial,
+		email varchar(50),
+		encrypted_password varchar(100),
+		phone bigint,
 		balance serial,
 		created_at timestamp
 	)`
@@ -61,13 +70,25 @@ func (s *PostgresStore) CreateAccountTable() error {
 	return err
 }
 
+func (s *PostgresStore) GetAccountByEmail(email string) (*Account, error) {
+	rows, err := s.db.Query(`select * from account where email=$1`, email)
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		return scanIntoAccount(rows)
+	}
+	return nil, fmt.Errorf("account %s not found", email)
+}
+
 func (s *PostgresStore) CreateAccount(acc *Account) error {
 	q := `insert into 
-		account(first_name, last_name, phone, balance, created_at)
-		values($1, $2, $3, $4, $5)
+		account(first_name, last_name, email, encrypted_password, phone, balance, created_at)
+		values($1, $2, $3, $4, $5, $6, $7)
 		returning id
 	`
-	err := s.db.QueryRow(q, acc.FirstName, acc.LastName, acc.Phone, acc.Balance, acc.CreatedAt).Scan(&acc.ID)
+	err := s.db.QueryRow(q, acc.FirstName, acc.LastName, acc.Email, acc.EncryptedPassword, acc.Phone, acc.Balance, acc.CreatedAt).Scan(&acc.ID)
 
 	return err
 }
@@ -79,7 +100,14 @@ func (s *PostgresStore) DeleteAccount(id int) error {
 	return err
 }
 
-func (s *PostgresStore) UpdateAccount(*Account) error {
+func (s *PostgresStore) UpdateAccount(account *Account) error {
+	q := `UPDATE account SET first_name=$1, last_name=$2, email=$3, encrypted_password=$4, phone=$5, balance=$6 WHERE id=$7`
+
+	_, err := s.db.Exec(q, account.FirstName, account.LastName, account.Email, account.EncryptedPassword, account.Phone, account.Balance, account.ID)
+	if err != nil {
+		return fmt.Errorf("error updating account: %v", err)
+	}
+
 	return nil
 }
 
@@ -122,6 +150,8 @@ func scanIntoAccount(rows *sql.Rows) (*Account, error) {
 		&account.ID,
 		&account.FirstName,
 		&account.LastName,
+		&account.Email,
+		&account.EncryptedPassword,
 		&account.Phone,
 		&account.Balance,
 		&account.CreatedAt,
